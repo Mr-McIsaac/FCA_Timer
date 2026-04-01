@@ -55,11 +55,10 @@
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center state-green text-slate-100 p-4">
 
-    <!-- Audio Elements (Using reliable public sound libraries) -->
+    <!-- Audio Elements (Updated with verified, permanent URLs) -->
     <audio id="audioRain" loop src="https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg" preload="auto"></audio>
-    <audio id="audioWhiteNoise" loop src="https://actions.google.com/sounds/v1/alarms/white_noise.ogg" preload="auto"></audio>
-    <audio id="audioForest" loop src="https://actions.google.com/sounds/v1/nature/forest_ambience.ogg" preload="auto"></audio>
-    <audio id="audioAlarm" src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" preload="auto"></audio>
+    <audio id="audioOcean" loop src="https://actions.google.com/sounds/v1/water/waves_crashing_on_rock_beach.ogg" preload="auto"></audio>
+    <audio id="audioFire" loop src="https://actions.google.com/sounds/v1/ambiences/fire_crackling.ogg" preload="auto"></audio>
 
     <div class="max-w-4xl w-full flex flex-col items-center">
         
@@ -96,9 +95,9 @@
                 <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Focus Sound</label>
                 <select id="soundSelect" onchange="handleSoundChange()" class="w-full bg-slate-800 text-slate-200 border border-slate-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-emerald-500 font-medium appearance-none cursor-pointer">
                     <option value="none">🔇 No Sound</option>
-                    <option value="audioWhiteNoise">📻 White Noise (Focus)</option>
                     <option value="audioRain">🌧️ Heavy Rain</option>
-                    <option value="audioForest">🌲 Forest Ambience</option>
+                    <option value="audioOcean">🌊 Ocean Waves</option>
+                    <option value="audioFire">🔥 Crackling Fire</option>
                 </select>
             </div>
 
@@ -147,7 +146,6 @@
             if (isRunning) return; // Prevent changing time while running
             setupOverlay.classList.remove('hidden');
             setupOverlay.classList.add('flex');
-            // Populate current values
             const m = Math.floor(totalSeconds / 60);
             const s = totalSeconds % 60;
             inputMin.value = m;
@@ -159,9 +157,8 @@
             const s = parseInt(inputSec.value) || 0;
             totalSeconds = (m * 60) + s;
             
-            // Limit to max 99:59 (5999 seconds)
             if (totalSeconds > 5999) totalSeconds = 5999;
-            if (totalSeconds < 1) totalSeconds = 60; // min 1 minute fallback
+            if (totalSeconds < 1) totalSeconds = 60;
 
             currentSeconds = totalSeconds;
             updateDisplay();
@@ -174,7 +171,7 @@
             if (isRunning) {
                 pauseTimer();
             } else {
-                if (currentSeconds <= 0) resetTimer(); // Auto-reset if clicking start when finished
+                if (currentSeconds <= 0) resetTimer();
                 startTimer();
             }
         }
@@ -197,8 +194,11 @@
 
             // Audio Handling
             playSelectedAudio();
-            document.getElementById('audioAlarm').pause();
-            document.getElementById('audioAlarm').currentTime = 0;
+            
+            // Resume Audio Context if needed (fixes browser autoplay restrictions)
+            if(window.audioCtx && window.audioCtx.state === 'suspended') {
+                window.audioCtx.resume();
+            }
         }
 
         function pauseTimer() {
@@ -225,8 +225,6 @@
             updateDisplay();
             textPlayPause.innerText = 'START';
             statusText.innerText = "Set time and press Start";
-            document.getElementById('audioAlarm').pause();
-            document.getElementById('audioAlarm').currentTime = 0;
         }
 
         function tick() {
@@ -241,18 +239,15 @@
         function timerFinished() {
             pauseTimer();
             currentSeconds = 0;
-            updateDisplay(); // forces red state
+            updateDisplay(); 
             textPlayPause.innerText = 'DONE';
             statusText.innerText = "Time is up!";
             
-            // Play Alarm
-            const alarm = document.getElementById('audioAlarm');
-            alarm.volume = 0.8;
-            alarm.play().catch(e => console.log("Audio play blocked by browser."));
+            // Play built-in synthesized alarm (100% reliable)
+            playReliableAlarm();
         }
 
         function updateDisplay() {
-            // Calculate minutes and seconds
             const m = Math.floor(currentSeconds / 60);
             const s = currentSeconds % 60;
             display.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -263,23 +258,20 @@
             display.classList.remove('text-green', 'text-yellow', 'text-red');
 
             if (currentSeconds === 0) {
-                // RED: Time is up
                 body.classList.add('state-red');
                 display.classList.add('text-red');
             } else if (currentSeconds <= 60 && totalSeconds > 60) {
-                // YELLOW: 1 minute warning (only applies if total timer was > 1 min)
                 body.classList.add('state-yellow');
                 display.classList.add('text-yellow');
                 if (isRunning) statusText.innerText = "1 Minute Warning!";
             } else {
-                // GREEN: Good to go
                 body.classList.add('state-green');
                 display.classList.add('text-green');
                 if (isRunning) statusText.innerText = "Focus Time";
             }
         }
 
-        // --- Audio Logic ---
+        // --- Robust Audio Logic ---
         
         function handleSoundChange() {
             currentAudioId = document.getElementById('soundSelect').value;
@@ -294,8 +286,7 @@
             
             const audioEl = document.getElementById(currentAudioId);
             if (audioEl) {
-                audioEl.volume = 0.4; // Keep background sounds soft
-                // Browsers often block autoplay, so we catch the promise
+                audioEl.volume = 0.5;
                 audioEl.play().catch(e => {
                     console.log("Autoplay blocked. User needs to interact first.");
                     statusText.innerText = "Click Play to start sound";
@@ -304,13 +295,43 @@
         }
 
         function stopAllAudio() {
-            const tracks = ['audioRain', 'audioWhiteNoise', 'audioForest'];
+            const tracks = ['audioRain', 'audioOcean', 'audioFire'];
             tracks.forEach(id => {
                 const el = document.getElementById(id);
-                if (el) {
-                    el.pause();
-                }
+                if (el) el.pause();
             });
+        }
+
+        // Synthesized Alarm (Requires no external downloads, 100% reliable)
+        function playReliableAlarm() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!window.audioCtx) window.audioCtx = new AudioContext();
+                const ctx = window.audioCtx;
+                
+                // Play 4 distinct "beeps"
+                for(let i = 0; i < 4; i++) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    
+                    osc.type = 'square'; // Classic digital alarm sound
+                    osc.frequency.value = 880; // A5 pitch
+                    
+                    const startTime = ctx.currentTime + (i * 0.5);
+                    
+                    gain.gain.setValueAtTime(0, startTime);
+                    gain.gain.linearRampToValueAtTime(0.3, startTime + 0.05); // Fade in
+                    gain.gain.linearRampToValueAtTime(0, startTime + 0.3); // Fade out
+                    
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.35);
+                }
+            } catch (e) {
+                console.error("Browser does not support Web Audio API for alarm");
+            }
         }
         
         // Setup inputs formatting
