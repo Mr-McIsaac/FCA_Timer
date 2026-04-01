@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FCA Visual Task Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="https://www.fcae.ca/static/site-content/page-uploads/1/twitter.jpg">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            transition: background-color 1s ease;
+        }
+        .timer-font {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums; /* Keeps numbers from shifting width */
+        }
+        
+        /* Traffic Light Pulse Animations */
+        @keyframes softPulseYellow {
+            0% { text-shadow: 0 0 20px rgba(251, 191, 36, 0.2); }
+            50% { text-shadow: 0 0 40px rgba(251, 191, 36, 0.6); }
+            100% { text-shadow: 0 0 20px rgba(251, 191, 36, 0.2); }
+        }
+        @keyframes flashRed {
+            0% { opacity: 1; text-shadow: 0 0 30px rgba(244, 63, 94, 0.8); }
+            50% { opacity: 0.5; text-shadow: 0 0 10px rgba(244, 63, 94, 0.2); }
+            100% { opacity: 1; text-shadow: 0 0 30px rgba(244, 63, 94, 0.8); }
+        }
+
+        .state-green { background-color: #022c22; } /* Dark Emerald */
+        .text-green { color: #34d399; } /* Emerald 400 */
+        
+        .state-yellow { background-color: #451a03; } /* Dark Amber */
+        .text-yellow { 
+            color: #fbbf24; /* Amber 400 */
+            animation: softPulseYellow 2s infinite;
+        }
+        
+        .state-red { background-color: #4c0519; } /* Dark Rose */
+        .text-red { 
+            color: #fb7185; /* Rose 400 */
+            animation: flashRed 1s infinite;
+        }
+
+        /* Hide number input arrows */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] { -moz-appearance: textfield; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center state-green text-slate-100 p-4">
+
+    <!-- Audio Elements (Using reliable public sound libraries) -->
+    <audio id="audioRain" loop src="https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg" preload="auto"></audio>
+    <audio id="audioWhiteNoise" loop src="https://actions.google.com/sounds/v1/alarms/white_noise.ogg" preload="auto"></audio>
+    <audio id="audioForest" loop src="https://actions.google.com/sounds/v1/nature/forest_ambience.ogg" preload="auto"></audio>
+    <audio id="audioAlarm" src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" preload="auto"></audio>
+
+    <div class="max-w-4xl w-full flex flex-col items-center">
+        
+        <header class="text-center mb-8 opacity-80">
+            <h1 class="text-2xl md:text-3xl font-bold tracking-wider uppercase text-emerald-100" id="mainTitle">Task Timer</h1>
+            <p class="text-sm font-medium mt-2" id="statusText">Set time and press Start</p>
+        </header>
+
+        <!-- The Timer Display -->
+        <div class="relative w-full flex justify-center items-center py-12 mb-8">
+            <div id="timeDisplay" class="text-[6rem] md:text-[12rem] lg:text-[16rem] font-black leading-none tracking-tighter timer-font text-green transition-colors duration-500 cursor-pointer" onclick="toggleSetup()">
+                15:00
+            </div>
+            
+            <!-- Setup Overlay (Hidden by default) -->
+            <div id="setupOverlay" class="absolute inset-0 bg-slate-900/95 backdrop-blur-md rounded-3xl hidden flex-col items-center justify-center border border-slate-700 shadow-2xl z-10 p-6">
+                <h3 class="text-xl font-bold mb-6 text-white">Set Duration</h3>
+                <div class="flex items-center gap-4 text-4xl md:text-6xl font-black timer-font">
+                    <input type="number" id="inputMin" value="15" min="0" max="99" class="w-24 md:w-32 bg-slate-800 text-center rounded-xl focus:ring-4 focus:ring-emerald-500 outline-none text-white border border-slate-600">
+                    <span class="text-slate-500">:</span>
+                    <input type="number" id="inputSec" value="00" min="0" max="59" class="w-24 md:w-32 bg-slate-800 text-center rounded-xl focus:ring-4 focus:ring-emerald-500 outline-none text-white border border-slate-600">
+                </div>
+                <button onclick="saveSetup()" class="mt-8 px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-full transition-all active:scale-95 shadow-lg shadow-emerald-900/50">
+                    Apply Time
+                </button>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex flex-col md:flex-row items-center gap-6 w-full max-w-xl bg-slate-900/40 p-4 md:p-6 rounded-3xl backdrop-blur-sm border border-white/10">
+            
+            <!-- Sound Selector -->
+            <div class="w-full md:w-auto flex-1">
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Focus Sound</label>
+                <select id="soundSelect" onchange="handleSoundChange()" class="w-full bg-slate-800 text-slate-200 border border-slate-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-emerald-500 font-medium appearance-none cursor-pointer">
+                    <option value="none">🔇 No Sound</option>
+                    <option value="audioWhiteNoise">📻 White Noise (Focus)</option>
+                    <option value="audioRain">🌧️ Heavy Rain</option>
+                    <option value="audioForest">🌲 Forest Ambience</option>
+                </select>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3 w-full md:w-auto">
+                <button id="btnReset" onclick="resetTimer()" class="p-4 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors border border-slate-700 flex-1 md:flex-none flex justify-center items-center group" title="Reset">
+                    <svg class="w-6 h-6 group-active:-rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+                
+                <button id="btnPlayPause" onclick="toggleTimer()" class="px-10 py-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-black tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex-1 md:flex-none flex justify-center items-center gap-2">
+                    <svg id="iconPlay" class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                    <svg id="iconPause" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                    <span id="textPlayPause">START</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Helpful Hint -->
+        <p class="text-slate-400 text-sm mt-8 opacity-60">Click the numbers to edit the time.</p>
+    </div>
+
+    <script>
+        // State variables
+        let totalSeconds = 15 * 60; // Default 15 mins
+        let currentSeconds = totalSeconds;
+        let timerInterval = null;
+        let isRunning = false;
+        let currentAudioId = 'none';
+
+        // DOM Elements
+        const display = document.getElementById('timeDisplay');
+        const setupOverlay = document.getElementById('setupOverlay');
+        const inputMin = document.getElementById('inputMin');
+        const inputSec = document.getElementById('inputSec');
+        const btnPlayPause = document.getElementById('btnPlayPause');
+        const iconPlay = document.getElementById('iconPlay');
+        const iconPause = document.getElementById('iconPause');
+        const textPlayPause = document.getElementById('textPlayPause');
+        const statusText = document.getElementById('statusText');
+        const body = document.body;
+
+        // Initialize Display
+        updateDisplay();
+
+        function toggleSetup() {
+            if (isRunning) return; // Prevent changing time while running
+            setupOverlay.classList.remove('hidden');
+            setupOverlay.classList.add('flex');
+            // Populate current values
+            const m = Math.floor(totalSeconds / 60);
+            const s = totalSeconds % 60;
+            inputMin.value = m;
+            inputSec.value = s.toString().padStart(2, '0');
+        }
+
+        function saveSetup() {
+            const m = parseInt(inputMin.value) || 0;
+            const s = parseInt(inputSec.value) || 0;
+            totalSeconds = (m * 60) + s;
+            
+            // Limit to max 99:59 (5999 seconds)
+            if (totalSeconds > 5999) totalSeconds = 5999;
+            if (totalSeconds < 1) totalSeconds = 60; // min 1 minute fallback
+
+            currentSeconds = totalSeconds;
+            updateDisplay();
+            
+            setupOverlay.classList.add('hidden');
+            setupOverlay.classList.remove('flex');
+        }
+
+        function toggleTimer() {
+            if (isRunning) {
+                pauseTimer();
+            } else {
+                if (currentSeconds <= 0) resetTimer(); // Auto-reset if clicking start when finished
+                startTimer();
+            }
+        }
+
+        function startTimer() {
+            if (currentSeconds <= 0) return;
+            
+            isRunning = true;
+            timerInterval = setInterval(tick, 1000);
+            
+            // UI Updates
+            iconPlay.classList.add('hidden');
+            iconPause.classList.remove('hidden');
+            textPlayPause.innerText = 'PAUSE';
+            btnPlayPause.classList.replace('bg-emerald-500', 'bg-amber-500');
+            btnPlayPause.classList.replace('hover:bg-emerald-400', 'hover:bg-amber-400');
+            btnPlayPause.classList.replace('shadow-emerald-500/20', 'shadow-amber-500/20');
+            
+            statusText.innerText = "Focus Time";
+
+            // Audio Handling
+            playSelectedAudio();
+            document.getElementById('audioAlarm').pause();
+            document.getElementById('audioAlarm').currentTime = 0;
+        }
+
+        function pauseTimer() {
+            isRunning = false;
+            clearInterval(timerInterval);
+            
+            // UI Updates
+            iconPause.classList.add('hidden');
+            iconPlay.classList.remove('hidden');
+            textPlayPause.innerText = 'RESUME';
+            btnPlayPause.classList.replace('bg-amber-500', 'bg-emerald-500');
+            btnPlayPause.classList.replace('hover:bg-amber-400', 'hover:bg-emerald-400');
+            btnPlayPause.classList.replace('shadow-amber-500/20', 'shadow-emerald-500/20');
+            
+            statusText.innerText = "Paused";
+
+            // Audio Handling
+            stopAllAudio();
+        }
+
+        function resetTimer() {
+            pauseTimer();
+            currentSeconds = totalSeconds;
+            updateDisplay();
+            textPlayPause.innerText = 'START';
+            statusText.innerText = "Set time and press Start";
+            document.getElementById('audioAlarm').pause();
+            document.getElementById('audioAlarm').currentTime = 0;
+        }
+
+        function tick() {
+            currentSeconds--;
+            updateDisplay();
+
+            if (currentSeconds <= 0) {
+                timerFinished();
+            }
+        }
+
+        function timerFinished() {
+            pauseTimer();
+            currentSeconds = 0;
+            updateDisplay(); // forces red state
+            textPlayPause.innerText = 'DONE';
+            statusText.innerText = "Time is up!";
+            
+            // Play Alarm
+            const alarm = document.getElementById('audioAlarm');
+            alarm.volume = 0.8;
+            alarm.play().catch(e => console.log("Audio play blocked by browser."));
+        }
+
+        function updateDisplay() {
+            // Calculate minutes and seconds
+            const m = Math.floor(currentSeconds / 60);
+            const s = currentSeconds % 60;
+            display.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            document.title = `(${m}:${s.toString().padStart(2, '0')}) Timer`;
+
+            // Traffic Light Logic
+            body.classList.remove('state-green', 'state-yellow', 'state-red');
+            display.classList.remove('text-green', 'text-yellow', 'text-red');
+
+            if (currentSeconds === 0) {
+                // RED: Time is up
+                body.classList.add('state-red');
+                display.classList.add('text-red');
+            } else if (currentSeconds <= 60 && totalSeconds > 60) {
+                // YELLOW: 1 minute warning (only applies if total timer was > 1 min)
+                body.classList.add('state-yellow');
+                display.classList.add('text-yellow');
+                if (isRunning) statusText.innerText = "1 Minute Warning!";
+            } else {
+                // GREEN: Good to go
+                body.classList.add('state-green');
+                display.classList.add('text-green');
+                if (isRunning) statusText.innerText = "Focus Time";
+            }
+        }
+
+        // --- Audio Logic ---
+        
+        function handleSoundChange() {
+            currentAudioId = document.getElementById('soundSelect').value;
+            if (isRunning) {
+                stopAllAudio();
+                playSelectedAudio();
+            }
+        }
+
+        function playSelectedAudio() {
+            if (currentAudioId === 'none') return;
+            
+            const audioEl = document.getElementById(currentAudioId);
+            if (audioEl) {
+                audioEl.volume = 0.4; // Keep background sounds soft
+                // Browsers often block autoplay, so we catch the promise
+                audioEl.play().catch(e => {
+                    console.log("Autoplay blocked. User needs to interact first.");
+                    statusText.innerText = "Click Play to start sound";
+                });
+            }
+        }
+
+        function stopAllAudio() {
+            const tracks = ['audioRain', 'audioWhiteNoise', 'audioForest'];
+            tracks.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.pause();
+                }
+            });
+        }
+        
+        // Setup inputs formatting
+        [inputMin, inputSec].forEach(input => {
+            input.addEventListener('blur', function() {
+                if (!this.value) this.value = "00";
+                this.value = this.value.padStart(2, '0');
+            });
+        });
+    </script>
+</body>
+</html>
